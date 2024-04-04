@@ -1,0 +1,87 @@
+---
+title: "Domače naloge pri visokorazsežnih"
+author: "Zarja Fabjan, Klemen Gorše, Tinkara PErme"
+date: "2024-04-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(doParallel)
+```
+
+# DN 1
+
+```{r}
+set.seed(123) # Ponovljivost rezultatov
+
+# Konstante
+
+j_st = 200 # št. napovednih spremenljivk
+M = 500 # št. permutacij
+n = 25 # velikost vzorca
+B = 1000 # št. simulacij
+
+# Generiranje podatkov
+
+## Od tu dol gre v simulacijo, se ponovi B krat
+
+data = NULL
+for (j in 1:j_st){
+  x = rnorm(25)
+  data = cbind(data, x)
+}
+
+# Generiranje odzivov
+
+y = rbinom(25, 1, 0.5)
+
+p_original = numeric(j_st)
+
+for (j in 1:j_st){
+  p_original[j] = t.test(data[,j] ~ y, var.equal = TRUE)$p.value
+}
+
+p_permute = matrix(rep(NA, M * j_st), nrow = M)
+
+for(i in 1:M){
+  y_permmute = sample(y)
+  for (j in 1:j_st){
+    p_permute[i, j] = t.test(data[,j] ~ y_permmute, var.equal = TRUE)$p.value
+  }
+}
+
+```
+
+
+```{r}
+N_CORES = detectCores()
+
+registerDoParallel(cores=N_CORES-2)
+
+res = foreach (k = 1:B,.combine = rbind) %dopar%{
+
+y_permute = sample(y)
+
+testt<-t.test(y[x==0],y[x==1],var.equal=T)
+n1<-sum(x==0)
+n2<-n-n1
+
+d<-matrix(rep(y,M),ncol=M)
+or<-matrix(1:n,nrow=n,ncol=M,byrow=F)
+or<-apply(or,2,sample)
+
+m<-matrix(unlist(lapply(1:M,function(i,x,y) x[y[,i],i],d,or )),ncol=M,byrow=F)
+
+d1<-m[1:n1,]
+d2<-m[(n1+1):n,]
+
+tt<-my.fast.t.test(d1,d2,n1,n2)
+
+
+c(testt$p.value, (1+ sum(abs(tt)>=abs(testt$stat)) )/(M + 1))
+
+}
+
+
+```
